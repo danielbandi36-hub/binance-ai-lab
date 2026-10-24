@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Binance Strategy Lab + AI Agent</title>
+<style>
+:root{--bg:#0b0f19;--p:#121826;--p2:#1a2236;--b:#1f2a44;--t:#e2e8f0;--d:#94a3b8;--g:#22c55e;--r:#ef4444;--c:#22d3ee}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--t);font:13px/1.45 Inter,system-ui,sans-serif}
+header{padding:12px 16px;border-bottom:1px solid var(--b);display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+header b{font-size:15px}header span{color:var(--d);font-size:12px}
+.wrap{display:grid;grid-template-columns:300px 1fr;gap:12px;padding:12px;max-width:1500px;margin:auto}
+@media(max-width:900px){.wrap{grid-template-columns:1fr}}
+.card{background:var(--p);border:1px solid var(--b);border-radius:10px;padding:12px;margin-bottom:12px}
+h3{margin:0 0 8px;font-size:13px}
+label{display:block;color:var(--d);font-size:11px;margin:8px 0 2px}
+input,select{width:100%;background:var(--bg);color:var(--t);border:1px solid var(--b);border-radius:7px;padding:7px 8px;font:inherit}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--c);outline-offset:1px}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button{background:linear-gradient(90deg,#06b6d4,#22c55e);color:#04110a;border:0;border-radius:7px;padding:8px 12px;font-weight:600;cursor:pointer;margin-top:10px;width:100%}
+button.alt{background:var(--p2);color:var(--t);border:1px solid var(--b)}
+button:disabled{opacity:.5;cursor:wait}
+canvas{width:100%;display:block;background:var(--bg);border-radius:8px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px;margin-top:10px}
+.stat{background:var(--bg);border:1px solid var(--b);border-radius:8px;padding:8px}
+.stat small{color:var(--d);display:block;font-size:11px}.stat b{font-size:15px}
+.up{color:var(--g)}.dn{color:var(--r)}
+#log{max-height:220px;overflow:auto;font:12px ui-monospace,Menlo,monospace}
+#log div{padding:4px 0;border-bottom:1px solid var(--b)}
+table{width:100%;border-collapse:collapse;font:12px ui-monospace,Menlo,monospace}
+th,td{padding:4px 6px;text-align:right;border-bottom:1px solid var(--b)}th{color:var(--d);font-weight:500}
+.tw{max-height:240px;overflow:auto}
+.warn{color:#f59e0b}button.red{background:#7f1d1d;color:#fff}.chk{display:flex;gap:6px;align-items:center;color:var(--t);font-size:12px}.chk input{width:auto}
+.note{color:var(--d);font-size:11px;margin-top:6px}
+</style></head><body>
+<header><b>Binance Strategy Lab</b><span>Binance candles · backtester · free-model AI agent · live trading on Deriv</span></header>
+<div class="wrap">
+<aside>
+ <div class="card"><h3>Market data</h3>
+  <label>Pair</label><select id="sym"><option>BTCUSDT</option><option>ETHUSDT</option><option>SOLUSDT</option><option>BNBUSDT</option><option>XRPUSDT</option><option>DOGEUSDT</option></select>
+  <div class="row"><div><label>Timeframe</label><select id="tf"><option>5m</option><option>15m</option><option selected>1h</option><option>4h</option><option>1d</option></select></div>
+  <div><label>Candles</label><select id="n"><option>1000</option><option selected>3000</option><option>5000</option></select></div></div>
+  <button id="bLoad">Load Binance data</button><div class="note" id="dinfo">No data loaded yet.</div></div>
+ <div class="card"><h3>Strategy tester</h3>
+  <label>Strategy</label><select id="st"><option value="ema">EMA crossover</option><option value="rsi">RSI mean reversion</option><option value="bb">Bollinger dip buy</option><option value="macd">MACD trend</option></select>
+  <div class="row"><div><label id="la">Fast EMA</label><input id="pa" type="number" value="12" step="any"></div><div><label id="lb">Slow EMA</label><input id="pb" type="number" value="26" step="any"></div></div>
+  <div class="row"><div><label>Stop loss %</label><input id="sl" type="number" value="3" step="any"></div><div><label>Take profit %</label><input id="tp" type="number" value="6" step="any"></div></div>
+  <div class="row"><div><label>Fee % per side</label><input id="fee" type="number" value="0.1" step="any"></div><div><label>Start capital</label><input id="cap" type="number" value="1000"></div></div>
+  <button id="bRun">Run backtest</button></div>
+ <div class="card"><h3>AI model</h3>
+  <label>Provider</label><select id="prov"><option value="poll">Pollinations (free, no key)</option><option value="or">OpenRouter (free models, free key)</option><option value="ol">Ollama (local, free)</option><option value="rules">Built-in rules (offline)</option></select>
+  <label>Model</label><input id="mdl" value="openai">
+  <label>API key (OpenRouter only)</label><input id="key" type="password" placeholder="sk-or-…" autocomplete="off">
+  <button id="bTune" class="alt">Let AI pick strategy &amp; backtest</button>
+  <div class="note">The key stays in this page’s memory and goes only to the provider you choose.</div></div>
+<div class="card"><h3>Deriv account</h3>
+  <div class="row"><div><label>App ID (developers.deriv.com)</label><input id="app" autocomplete="off"></div><div><label>API token (PAT)</label><input id="tok" type="password" autocomplete="off"></div></div>
+  <label>Account</label><select id="atype"><option value="demo">Demo</option><option value="real">Real money</option></select><button id="bConn" class="alt">Connect to Deriv</button><div class="note" id="dst">Not connected</div>
+  <div class="row"><div><label>Stake</label><input id="stake" type="number" value="1" step="any"></div><div><label>Duration (min)</label><input id="dur" type="number" value="5"></div></div>
+  <div class="row"><div><label>Max stake</label><input id="mstake" type="number" value="2" step="any"></div><div><label>Max trades per day</label><input id="mtr" type="number" value="10"></div></div>
+  <label>Daily loss limit</label><input id="mloss" type="number" value="5" step="any">
+  <label class="chk"><input id="cfm" type="checkbox" checked> Confirm each trade</label>
+  <label class="chk"><input id="armed" type="checkbox"> Arm live trading</label>
+  <div class="note">Start with a demo token. Until you arm it, the agent only logs the trades it would place. Buy signals place Rise (CALL), sell signals place Fall (PUT). Deriv supports BTCUSDT and ETHUSDT here.</div></div>
+</aside>
+<main>
+ <div class="card"><h3 id="ctitle">Price chart</h3><canvas id="cv" height="300"></canvas></div>
+ <div class="card"><h3>Backtest results</h3><div class="stats" id="stats"><div class="note">Load data, then run a backtest.</div></div>
+  <h3 style="margin-top:12px">Equity curve vs buy &amp; hold</h3><canvas id="eq" height="150"></canvas>
+  <div class="tw" style="margin-top:10px"><table id="tt"></table></div></div>
+ <div class="card"><h3>AI trading agent (paper money)</h3>
+  <div class="stats"><div class="stat"><small>Cash</small><b id="pc">$1,000.00</b></div><div class="stat"><small>Position</small><b id="pp">flat</b></div><div class="stat"><small>Equity</small><b id="pe">$1,000.00</b></div></div>
+  <label>Decision source</label><select id="src"><option value="ai">AI model</option><option value="strat">Strategy from the tester</option></select>
+  <div class="row"><button id="bAsk">Ask AI now</button><button id="bAuto" class="alt">Auto: off</button></div>
+  <button id="bKill" class="red">Stop everything</button>
+  <div id="log" style="margin-top:10px"></div>
+  <div class="note">Auto mode asks the model once a minute using the latest Binance candles and applies the stop loss and take profit above. Real orders are sent only when a Deriv account is connected and live trading is armed. Not financial advice.</div></div>
+</main></div>
+<script>
+const $=id=>document.getElementById(id);
+let C=[];
+/* ---------- Binance data ---------- */
+const HOSTS=['https://api.binance.com','https://data-api.binance.vision'];
+async function klines(sym,tf,limit,end){
+ for(const h of HOSTS){try{const r=await fetch(`${h}/api/v3/klines?symbol=${sym}&interval=${tf}&limit=${limit}`+(end?`&endTime=${end}`:''));if(r.ok)return await r.json()}catch(e){}}
+ throw new Error('Could not reach Binance. It may be blocked on your network or in your region.');
+}
+const toC=a=>a.map(k=>({t:k[0],o:+k[1],h:+k[2],l:+k[3],c:+k[4],v:+k[5]}));
+async function load(){
+ const s=$('sym').value,tf=$('tf').value,n=+$('n').value;let out=[],end=null;
+ while(out.length<n){const a=await klines(s,tf,Math.min(1000,n-out.length),end);if(!a.length)break;out=a.concat(out);end=a[0][0]-1;$('dinfo').textContent=`Loading… ${out.length}/${n}`}
+ C=toC(out);
+ $('dinfo').textContent=`${C.length} candles · ${new Date(C[0].t).toLocaleDateString()} to ${new Date(C.at(-1).t).toLocaleDateString()}`;
+ draw([]);
+}
+/* ---------- indicators ---------- */
+const ema=(x,p)=>{const k=2/(p+1);let e=x[0];return x.map((v,i)=>i?e=v*k+e*(1-k):e)};
+const sma=(x,p)=>{let s=0;return x.map((v,i)=>{s+=v;if(i>=p)s-=x[i-p];return i<p-1?NaN:s/p})};
+function rsi(x,p){const o=Array(x.length).fill(NaN);let g=0,l=0;for(let i=1;i<x.length;i++){const d=x[i]-x[i-1],u=Math.max(d,0),w=Math.max(-d,0);
+ if(i<=p){g+=u;l+=w;if(i==p){g/=p;l/=p;o[i]=100-100/(1+g/(l||1e-9))}}else{g=(g*(p-1)+u)/p;l=(l*(p-1)+w)/p;o[i]=100-100/(1+g/(l||1e-9))}}return o}
+/* ---------- strategies: 1 = want to be long, 0 = flat ---------- */
+const S={
+ ema:(c,p)=>{const f=ema(c,p.a),s=ema(c,p.b);return c.map((_,i)=>i<p.b?0:+(f[i]>s[i]))},
+ rsi:(c,p)=>{const r=rsi(c,14);let st=0;return c.map((_,i)=>{if(r[i]<p.a)st=1;else if(r[i]>p.b)st=0;return st})},
+ bb:(c,p)=>{const m=sma(c,p.a);let st=0;return c.map((v,i)=>{if(isNaN(m[i]))return 0;let q=0;for(let j=i-p.a+1;j<=i;j++)q+=(c[j]-m[i])**2;const sd=Math.sqrt(q/p.a);if(v<m[i]-p.b*sd)st=1;else if(v>m[i])st=0;return st})},
+ macd:(c)=>{const a=ema(c,12),b=ema(c,26),m=a.map((v,i)=>v-b[i]),g=ema(m,9);return c.map((_,i)=>i<35?0:+(m[i]>g[i]))}
+};
+const DEF={ema:['Fast EMA','Slow EMA',12,26],rsi:['Buy below RSI','Sell above RSI',30,55],bb:['Period','Std-dev multiple',20,2],macd:['(unused)','(unused)',0,0]};
+function setDef(){const d=DEF[$('st').value];$('la').textContent=d[0];$('lb').textContent=d[1];$('pa').value=d[2];$('pb').value=d[3]}
+$('st').onchange=setDef;
+/* ---------- backtester (signals act on the next candle’s open) ---------- */
+function bt(){
+ if(!C.length)throw new Error('Load Binance data first.');
+ const c=C.map(k=>k.c),sig=S[$('st').value](c,{a:+$('pa').value,b:+$('pb').value});
+ const fee=+$('fee').value/100,sl=+$('sl').value/100,tp=+$('tp').value/100,cap=+$('cap').value;
+ let cash=cap,q=0,pos=null,eq=[cap],tr=[];
+ const close=(i,px)=>{cash=q*px*(1-fee);tr.push({i0:pos.i,i1:i,p0:pos.p,p1:px,r:px/pos.p-1-2*fee});q=0;pos=null};
+ for(let i=1;i<C.length;i++){const k=C[i];
+  if(pos){let ex=null;
+   if(sl&&k.l<=pos.p*(1-sl))ex=pos.p*(1-sl);else if(tp&&k.h>=pos.p*(1+tp))ex=pos.p*(1+tp);else if(!sig[i-1])ex=k.o;
+   if(ex)close(i,ex)}
+  else if(sig[i-1]&&!sig[i-2]){q=cash*(1-fee)/k.o;cash=0;pos={i,p:k.o}}
+  eq.push(cash+q*k.c)}
+ if(pos){close(C.length-1,C.at(-1).c);eq[eq.length-1]=cash}
+ let pk=cap,dd=0;eq.forEach(v=>{pk=Math.max(pk,v);dd=Math.max(dd,1-v/pk)});
+ const w=tr.filter(t=>t.r>0),L=tr.filter(t=>t.r<=0),gw=w.reduce((a,t)=>a+t.r,0),gl=-L.reduce((a,t)=>a+t.r,0);
+ return{eq,tr,res:{ret:eq.at(-1)/cap-1,bh:c.at(-1)/c[0]-1,n:tr.length,win:tr.length?w.length/tr.length:0,pf:gl?gw/gl:(gw?Infinity:0),dd,end:eq.at(-1)}};
+}
+function run(){
+ const o=bt(),r=o.res,pc=v=>(v*100).toFixed(2)+'%',cl=v=>v>=0?'up':'dn';
+ $('stats').innerHTML=[['Strategy return',pc(r.ret),cl(r.ret)],['Buy &amp; hold',pc(r.bh),cl(r.bh)],['Final equity','$'+r.end.toFixed(2),''],['Trades',r.n,''],['Win rate',pc(r.win),''],['Profit factor',isFinite(r.pf)?r.pf.toFixed(2):'∞',''],['Max drawdown',pc(r.dd),'dn']]
+  .map(s=>`<div class="stat"><small>${s[0]}</small><b class="${s[2]}">${s[1]}</b></div>`).join('');
+ $('tt').innerHTML='<tr><th>Entry</th><th>Exit</th><th>Buy</th><th>Sell</th><th>P/L</th></tr>'+o.tr.slice(-60).reverse().map(t=>`<tr><td>${new Date(C[t.i0].t).toLocaleDateString()}</td><td>${new Date(C[t.i1].t).toLocaleDateString()}</td><td>${t.p0.toFixed(2)}</td><td>${t.p1.toFixed(2)}</td><td class="${cl(t.r)}">${(t.r*100).toFixed(2)}%</td></tr>`).join('');
+ draw(o.tr);drawEq(o.eq);return o;
+}
+/* ---------- charts ---------- */
+function fit(cv){const d=devicePixelRatio||1,w=cv.clientWidth,h=cv.getAttribute('height')*1;cv.width=w*d;cv.height=h*d;const x=cv.getContext('2d');x.scale(d,d);return[x,w,h]}
+function draw(tr){
+ const cv=$('cv');cv.style.height=cv.getAttribute('height')+'px';const[x,w,h]=fit(cv);x.clearRect(0,0,w,h);
+ if(!C.length)return;const N=Math.min(160,C.length),o=C.length-N,V=C.slice(o);
+ const hi=Math.max(...V.map(k=>k.h)),lo=Math.min(...V.map(k=>k.l)),sy=v=>10+(hi-v)/(hi-lo||1)*(h-20),bw=(w-50)/N;
+ x.fillStyle='#94a3b8';x.font='10px ui-monospace,monospace';
+ for(let i=0;i<=4;i++){const v=lo+(hi-lo)*i/4,y=sy(v);x.strokeStyle='#1f2a44';x.beginPath();x.moveTo(0,y);x.lineTo(w-48,y);x.stroke();x.fillText(v.toFixed(v>100?0:4),w-46,y+3)}
+ V.forEach((k,i)=>{const X=i*bw+bw/2,up=k.c>=k.o;x.strokeStyle=x.fillStyle=up?'#22c55e':'#ef4444';x.beginPath();x.moveTo(X,sy(k.h));x.lineTo(X,sy(k.l));x.stroke();x.fillRect(X-Math.max(bw*.35,1),Math.min(sy(k.o),sy(k.c)),Math.max(bw*.7,2),Math.max(Math.abs(sy(k.o)-sy(k.c)),1))});
+ tr.forEach(t=>{[[t.i0,t.p0,1],[t.i1,t.p1,0]].forEach(([i,p,b])=>{if(i<o)return;const X=(i-o)*bw+bw/2,Y=sy(p);x.fillStyle=b?'#22d3ee':'#f59e0b';x.beginPath();b?(x.moveTo(X,Y-2),x.lineTo(X-4,Y+7),x.lineTo(X+4,Y+7)):(x.moveTo(X,Y+2),x.lineTo(X-4,Y-7),x.lineTo(X+4,Y-7));x.fill()})});
+ $('ctitle').textContent=`${$('sym').value} · ${$('tf').value} · last ${N} candles (cyan = buy, amber = sell)`;
+}
+function drawEq(e){
+ const cv=$('eq');cv.style.height=cv.getAttribute('height')+'px';const[x,w,h]=fit(cv);x.clearRect(0,0,w,h);
+ const cap=e[0],bh=C.map(k=>cap*k.c/C[0].c),all=e.concat(bh),hi=Math.max(...all),lo=Math.min(...all);
+ const line=(a,col)=>{x.strokeStyle=col;x.lineWidth=1.5;x.beginPath();a.forEach((v,i)=>{const X=i/(a.length-1)*w,Y=6+(hi-v)/(hi-lo||1)*(h-12);i?x.lineTo(X,Y):x.moveTo(X,Y)});x.stroke()};
+ line(bh,'#64748b');line(e,'#22d3ee');
+}
+/* ---------- AI ---------- */
+const PROV={poll:{url:'https://text.pollinations.ai/openai',m:'openai'},or:{url:'https://openrouter.ai/api/v1/chat/completions',m:'meta-llama/llama-3.3-70b-instruct:free'},ol:{url:'http://localhost:11434/v1/chat/completions',m:'llama3.2'},rules:{m:'-'}};
+$('prov').onchange=()=>$('mdl').value=PROV[$('prov').value].m;
+async function llm(msgs){
+ const p=$('prov').value,cfg=PROV[p],h={'Content-Type':'application/json'};if(p=='or')h.Authorization='Bearer '+$('key').value;
+ const r=await fetch(cfg.url,{method:'POST',headers:h,body:JSON.stringify({model:$('mdl').value,messages:msgs,temperature:.3})});
+ if(!r.ok)throw new Error(`${p} returned ${r.status}`);const j=await r.json();return j.choices[0].message.content;
+}
+const parse=t=>{const m=t.match(/\{[\s\S]*\}/);if(!m)throw new Error('Model did not return JSON');return JSON.parse(m[0])};
+function snap(cs){
+ const c=cs.map(k=>k.c),n=c.length-1,e1=ema(c,12)[n],e2=ema(c,26)[n],r=rsi(c,14)[n],m=sma(c,20)[n];
+ let q=0;for(let j=n-19;j<=n;j++)q+=(c[j]-m)**2;const sd=Math.sqrt(q/20),atr=cs.slice(-14).reduce((a,k)=>a+(k.h-k.l),0)/14;
+ return{price:c[n],ema12:+e1.toFixed(2),ema26:+e2.toFixed(2),rsi14:+r.toFixed(1),bb_z:+((c[n]-m)/(sd||1)).toFixed(2),atr_pct:+(atr/c[n]*100).toFixed(2),chg_24bars_pct:+((c[n]/c[n-24]-1)*100).toFixed(2),last20_closes:c.slice(-20).map(v=>+v.toFixed(2))};
+}
+function rules(s){
+ if(s.ema12>s.ema26&&s.rsi14<70)return{action:'BUY',confidence:.55,reason:'Uptrend (EMA12 above EMA26) and RSI not overbought.'};
+ if(s.ema12<s.ema26||s.rsi14>75)return{action:'SELL',confidence:.55,reason:'Trend weakened or RSI overbought.'};
+ return{action:'HOLD',confidence:.4,reason:'No clear edge.'};
+}
+async function decide(s,long){
+ if($('prov').value=='rules')return rules(s);
+ const t=await llm([{role:'system',content:'You are a cautious crypto spot trading analyst. Reply with JSON only: {"action":"BUY"|"SELL"|"HOLD","confidence":0-1,"reason":"one short sentence"}. BUY only if flat, SELL only if holding. Prefer HOLD when unclear.'},{role:'user',content:`Pair ${$('sym').value} ${$('tf').value}. Currently ${long?'HOLDING a long position':'FLAT'}. Indicators: ${JSON.stringify(s)}`}]);
+ return parse(t);
+}
+/* paper wallet */
+const W={cash:1000,q:0,ent:0};let timer=null;
+const logp=(m,c)=>{const d=document.createElement('div');d.innerHTML=`<span style="color:var(--d)">${new Date().toLocaleTimeString()}</span> ${c?`<b class="${c}">`:''}${m}${c?'</b>':''}`;$('log').prepend(d)};
+async function ask(){
+ const sym=$('sym').value,tf=$('tf').value;
+ const cs=toC(await klines(sym,tf,120)),px=cs.at(-1).c,s=snap(cs),long=W.q>0;
+ if(long){const sl=+$('sl').value/100,tp=+$('tp').value/100;
+  if(sl&&px<=W.ent*(1-sl))return sell(px,'stop loss hit');if(tp&&px>=W.ent*(1+tp))return sell(px,'take profit hit')}
+ let d;if($('src').value=='strat')d=stratDecision(cs);else try{d=await decide(s,long)}catch(e){logp(`AI unavailable (${e.message}); using built-in rules.`);d=rules(s)}
+ const a=String(d.action).toUpperCase();
+ logp(`${a} @ ${px.toFixed(2)} (${Math.round((d.confidence||0)*100)}%) — ${d.reason||''}`,a=='BUY'?'up':a=='SELL'?'dn':'');
+ if(a=='BUY'&&!long&&(d.confidence||0)>=.5){W.q=W.cash*.999/px;W.cash=0;W.ent=px}
+ else if(a=='SELL'&&long)sell(px,'AI sell');
+ wallet(px);
+ if((a=='BUY'||a=='SELL')&&(d.confidence||0)>=.5)await live(a=='BUY'?'CALL':'PUT',d.reason||'');
+}
+function sell(px,why){const pl=px/W.ent-1;W.cash=W.q*px*.999;W.q=0;logp(`Closed @ ${px.toFixed(2)} (${why}), ${(pl*100).toFixed(2)}%`,pl>=0?'up':'dn');wallet(px)}
+function wallet(px){const f=v=>'$'+v.toLocaleString(void 0,{minimumFractionDigits:2,maximumFractionDigits:2});$('pc').textContent=f(W.cash);$('pp').textContent=W.q?`${W.q.toFixed(5)} @ ${W.ent.toFixed(2)}`:'flat';$('pe').textContent=f(W.cash+W.q*px)}
+async function tune(){
+ const cs=C.length?C:toC(await klines($('sym').value,$('tf').value,200)),s=snap(cs);let p;
+ try{
+  if($('prov').value=='rules')throw new Error('rules mode');
+  p=parse(await llm([{role:'system',content:'Pick one strategy for the market regime. JSON only: {"strategy":"ema"|"rsi"|"bb"|"macd","a":number,"b":number,"reason":"short"}. ema: a=fast,b=slow. rsi: a=buy below,b=sell above. bb: a=period,b=std multiple. macd: a,b ignored.'},{role:'user',content:JSON.stringify(s)}]));
+ }catch(e){p=s.atr_pct>1.2?{strategy:'bb',a:20,b:2,reason:'High volatility: buying dips.'}:{strategy:'ema',a:12,b:26,reason:'Calmer market: following trend.'};logp(`AI tuning fell back to rules (${e.message}).`)}
+ if(!S[p.strategy])p.strategy='ema';$('st').value=p.strategy;setDef();if(p.a)$('pa').value=p.a;if(p.b)$('pb').value=p.b;
+ logp(`AI picked ${p.strategy} (${$('pa').value}, ${$('pb').value}): ${p.reason||''}`);run();
+}
+/* ---------- Deriv live trading ---------- */
+const D={ws:null,id:0,pend:{},acct:null,last:0,seen:new Set(),day:new Date().toISOString().slice(0,10),n:0,pnl:0};
+try{const z=JSON.parse(localStorage.dl||'{}');if(z.day==D.day){D.n=z.n;D.pnl=z.pnl}}catch(e){}
+const dsave=()=>{try{localStorage.dl=JSON.stringify({day:D.day,n:D.n,pnl:D.pnl})}catch(e){}};
+const dsend=r=>new Promise((ok,no)=>{const id=++D.id;r.req_id=id;D.pend[id]=[ok,no];D.ws.send(JSON.stringify(r));setTimeout(()=>{if(D.pend[id]){delete D.pend[id];no(new Error('Deriv did not answer in time'))}},15000)});
+function dstat(){const a=D.acct;$('dst').innerHTML=a?`<b class="${a.is_virtual?'up':'warn'}">${a.is_virtual?'DEMO':'REAL MONEY'}</b> ${a.loginid} · ${a.balance.toFixed(2)} ${a.currency}<br>Today: ${D.n} trades, P/L ${D.pnl.toFixed(2)}`:'Not connected'}
+function settle(c){if(!c.is_sold||D.seen.has(c.contract_id))return;D.seen.add(c.contract_id);const p=+c.profit;D.pnl+=p;dsave();dstat();logp(`Deriv contract ${c.contract_id} closed: ${p>=0?'+':''}${p.toFixed(2)}`,p>=0?'up':'dn')}
+async function connect(){
+ const app=$('app').value.trim(),tok=$('tok').value.trim();if(!app||!tok)throw new Error('Enter your Deriv App ID and API token.');
+ if(D.ws)D.ws.close();
+ const H={Authorization:'Bearer '+tok,'Deriv-App-ID':app},want=$('atype').value;
+ const lr=await fetch('https://api.derivws.com/trading/v1/options/accounts',{headers:H}).catch(()=>{throw new Error('Could not reach api.derivws.com. Open this file from your own device or host, not the claude.ai preview.')});
+ const lj=await lr.json().catch(()=>({}));
+ if(!lr.ok)throw new Error(`Deriv rejected the token (${lr.status}): ${lj.errors?.[0]?.message||'check that the App ID and PAT come from developers.deriv.com and the token has the trade scope'}`);
+ const list=Array.isArray(lj.data)?lj.data:(lj.data?.accounts||[]);
+ const a=list.find(x=>String(x.account_type||'').toLowerCase()==want)||list[0];
+ if(!a)throw new Error('No Deriv Options account found for this token.');
+ const id=a.account_id||a.id;
+ const or=await fetch(`https://api.derivws.com/trading/v1/options/accounts/${id}/otp`,{method:'POST',headers:H});
+ const oj=await or.json().catch(()=>({}));
+ if(!or.ok||!oj.data?.url)throw new Error(`Could not open a trading session (${or.status}): ${oj.errors?.[0]?.message||'unknown error'}`);
+ return new Promise((ok,no)=>{
+ const ws=D.ws=new WebSocket(oj.data.url);
+ ws.onerror=()=>no(new Error('Could not open the Deriv connection.'));
+ ws.onclose=()=>{D.acct=null;$('armed').checked=false;dstat()};
+ ws.onmessage=e=>{const m=JSON.parse(e.data),p=D.pend[m.req_id];
+  if(p){delete D.pend[m.req_id];m.error?p[1](new Error(m.error.message)):p[0](m)}
+  if(m.msg_type=='balance'&&D.acct&&m.balance){D.acct.balance=+m.balance.balance;dstat()}
+  if(m.proposal_open_contract)settle(m.proposal_open_contract)};
+ ws.onopen=async()=>{try{const b=(await dsend({balance:1,subscribe:1})).balance;D.acct={loginid:b.loginid||id,balance:+b.balance,currency:b.currency,is_virtual:/\/ws\/demo/.test(oj.data.url)};dstat();logp(`Connected to Deriv ${D.acct.is_virtual?'demo':'REAL'} account ${D.acct.loginid}`);ok()}catch(e){ws.close();no(e)}};
+})}
+$('armed').onchange=e=>{if(!e.target.checked)return;
+ if(!D.acct){e.target.checked=false;return alert('Connect to Deriv first.')}
+ if(!D.acct.is_virtual&&!confirm('This is a REAL MONEY account. The agent will place real trades and you can lose your stake. Arm live trading?'))e.target.checked=false};
+function stratDecision(cs){
+ const c=cs.slice(0,-1).map(k=>k.c),s=S[$('st').value](c,{a:+$('pa').value,b:+$('pb').value}),n=c.length-1;
+ if(s[n]&&!s[n-1])return{action:'BUY',confidence:.9,reason:`${$('st').value} entry signal on the last closed candle`};
+ if(!s[n]&&s[n-1])return{action:'SELL',confidence:.9,reason:'exit signal on the last closed candle'};
+ return{action:'HOLD',confidence:.5,reason:'No new signal on the last closed candle'};
+}
+const MAP={BTCUSDT:'cryBTCUSD',ETHUSDT:'cryETHUSD'};
+async function live(side,why){
+ if(!D.acct)return;
+ const stake=+$('stake').value,dur=+$('dur').value,sym=MAP[$('sym').value];
+ if(!sym)return logp('Deriv has no matching market for this pair. Use BTCUSDT or ETHUSDT.','warn');
+ if(Date.now()-D.last<dur*60000)return;
+ if(stake>+$('mstake').value)return logp('Stake is above your max stake. Trade skipped.','dn');
+ if(D.n>=+$('mtr').value)return logp('Daily trade limit reached. Trade skipped.','dn');
+ if(D.pnl<=-+$('mloss').value)return logp('Daily loss limit reached. Live trading paused.','dn');
+ if(!$('armed').checked)return logp(`Not armed. Would buy ${side} on ${sym}: stake ${stake} ${D.acct.currency}, ${dur} min.`,'warn');
+ if($('cfm').checked&&!confirm(`${D.acct.is_virtual?'DEMO':'REAL MONEY'}: buy ${side} on ${sym}\nStake ${stake} ${D.acct.currency}, ${dur} min\n${why}`))return logp('You declined this trade.');
+ try{
+  const pr=(await dsend({proposal:1,amount:stake,basis:'stake',contract_type:side,currency:D.acct.currency,duration:dur,duration_unit:'m',underlying_symbol:sym})).proposal;
+  const b=(await dsend({buy:pr.id,price:pr.ask_price})).buy;
+  D.last=Date.now();D.n++;dsave();dstat();logp(`DERIV ${side} ${sym}, stake ${stake}, contract ${b.contract_id}`,side=='CALL'?'up':'dn');
+  dsend({proposal_open_contract:1,contract_id:b.contract_id,subscribe:1}).then(r=>settle(r.proposal_open_contract)).catch(()=>{});
+ }catch(e){logp('Deriv rejected the trade: '+e.message,'dn')}
+}
+$('bKill').onclick=()=>{$('armed').checked=false;if(timer){clearInterval(timer);timer=null;$('bAuto').textContent='Auto: off'}logp('Stopped: auto mode is off and live trading is disarmed.','warn')};
+/* wiring */
+const guard=(b,f)=>$(b).onclick=async()=>{const el=$(b);el.disabled=true;try{await f()}catch(e){logp(e.message,'dn');$('dst').textContent=e.message}el.disabled=false};
+guard('bLoad',load);guard('bConn',connect);guard('bRun',async()=>run());guard('bTune',tune);guard('bAsk',ask);
+$('bAuto').onclick=()=>{if(timer){clearInterval(timer);timer=null;$('bAuto').textContent='Auto: off'}else{$('bAuto').textContent='Auto: every 60s';ask().catch(e=>logp(e.message,'dn'));timer=setInterval(()=>ask().catch(e=>logp(e.message,'dn')),60000)}};
+addEventListener('resize',()=>{if(C.length){const o=bt();draw(o.tr);drawEq(o.eq)}});
+$('prov').onchange();
+</script></body></html>
